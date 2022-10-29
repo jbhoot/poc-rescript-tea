@@ -1,52 +1,100 @@
 open Tea.Html
 
-type state = {counter: int}
+type todo = {
+  userId: int,
+  id: int,
+  title: string,
+  completed: bool,
+}
+
+type session = {todos: array<todo>}
+
+type status<'a> =
+  | NotLoaded
+  | Loading
+  | Loaded('a)
+  | FailedToLoad(string)
+
+type page = Home({session: session, todos: status<array<todo>>})
+
+type state = {page: page}
 
 type msg =
-  | Increment // This will be our message to increment the counter
-  | Decrement // This will be our message to decrement the counter
-  | Reset // This will be our message to reset the counter to 0
-  | Set(int) // This will be our message to set the counter to a specific value
+  | GetTodos
+  | GotTodos(array<todo>)
+  | GotErrorNotTodos(string)
 
-let init = () => {counter: 5}
+@scope("JSON") external parseTodoResponse: string => array<todo> = "parse"
+
+let getTodos = () => {
+  //   Tea.Http.request({
+  //     method: "GET",
+  //     headers: list{
+  //       Header("Content-type", "application/json"),
+  //     },
+  //     url: "https://jsonplaceholder.typicode.com/todos",
+  //     body: Web.XMLHttpRequest.EmptyBody,
+  //     // expect: Tea.Http.expectStringResponse(Decoders.wrapExpect(decoder)),
+  //     expect: Http.Expect(Web.XMLHttpRequest.JsonResponseType, ),
+  //     timeout: None,
+  //     withCredentials: false,
+  //   })
+
+  Tea.Http.send(resp => {
+    switch resp {
+    | Ok(body) =>
+      GotTodos(body->parseTodoResponse)
+    | Error(err) =>
+      let error = switch err {
+      | BadUrl(string) => "Bad url " ++ string
+      | Timeout => "Timeout"
+      | NetworkError => "NetworkError"
+      | Aborted => "Aborted"
+      | BadStatus(_) => "BadStatus "
+      | BadPayload(_, _) => "BadPayload "
+      }
+      GotErrorNotTodos(error)
+    }
+  }, Tea.Http.getString("https://jsonplaceholder.typicode.com/todos"))
+}
+
+let init = () => ({page: Home({session: {todos: []}, todos: NotLoaded})}, getTodos())
 
 let update = (model, msg) =>
-  switch msg {
-  | Increment => {counter: model.counter + 1}
-  | Decrement => {counter: model.counter - 1}
-  | Reset => {counter: 0}
-  | Set(v) => {counter: v}
+  switch model.page {
+  | Home({session, _}) =>
+    switch msg {
+    | GetTodos => ({page: Home({session, todos: Loading})}, getTodos())
+    | GotTodos(todos) => ({page: Home({session: {todos: todos}, todos: Loaded(todos)})}, Tea.Cmd.none)
+    | GotErrorNotTodos(err) => ({page: Home({session, todos: FailedToLoad(err)})}, Tea.Cmd.none)
+    }
   }
 
-let view_button = (title, msg) => {
-  button(list{Events.onClick(msg)}, list{text(title)})
+let viewButton = (title, msg) => {
+  button(list{onClick(msg)}, list{text(title)})
+}
+
+let viewTodos = todos => {
+  switch todos {
+  | NotLoaded => span(list{}, list{"Not loaded yet"->text})
+  | Loading => span(list{}, list{"Loading"->text})
+  | Loaded(todos) =>
+    ol(
+      list{},
+      todos->Js.Array2.map(todo => li(list{}, list{todo.title->text}))->Belt.List.fromArray,
+    )
+  | FailedToLoad(error) => span(list{}, list{error->text})
+  }
 }
 
 let view = model =>
-  div(
-    list{},
-    list{
-      span(
-        list{Attributes.classList(list{("value", true)})},
-        list{model.counter->Js.Int.toString->text},
-      ),
-      br(list{}),
-      view_button("Increment", Increment),
-      br(list{}),
-      view_button("Decrement", Decrement),
-      br(list{}),
-      view_button("Set to 35", Set(35)),
-      br(list{}),
-      if model.counter != 0 {
-        view_button("Reset", Reset)
-      } else {
-        noNode
-      },
-    },
-  )
+  switch model.page {
+  | Home({todos}) => div(list{}, list{viewButton("Get todos", GetTodos), viewTodos(todos)})
+  }
 
-let main = Tea.App.beginnerProgram({
-  model: init(),
+let main = Tea.App.standardProgram({
+  init,
+  subscriptions: _ => Tea.Sub.none,
   update,
   view,
 })
