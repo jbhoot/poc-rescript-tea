@@ -4,8 +4,8 @@
 - [x] Use CSS classes
 - [x] Make network calls
 - [x] URL navigation
-- [ ] Use a custom component
-- [ ] Implement session + page architecture found in https://github.com/elm/package.elm-lang.org/
+- [x] Use a custom component
+- [x] Implement session + page architecture found in https://github.com/elm/package.elm-lang.org/
 
 ## Usage
 
