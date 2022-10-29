@@ -1,3 +1,5 @@
+%%raw(`import '@vanillawc/wc-datepicker'`)
+
 open Tea.Html
 
 type user = {
@@ -35,6 +37,8 @@ type msg =
   | GetTodos
   | GotTodos(array<todo>)
   | GotErrorNotTodos(string)
+  | CustomClicked
+  | DateSelected(string)
 
 @scope("JSON") external parseTodoResponse: string => array<todo> = "parse"
 
@@ -79,6 +83,12 @@ let update = (model, msg) => {
       Tea.Cmd.none,
     )
   | GotErrorNotTodos(err) => ({page: Home({session, todos: FailedToLoad(err)})}, Tea.Cmd.none)
+  | CustomClicked =>
+    Js.Console.log("custom click occurred")
+    (model, Tea.Cmd.none)
+  | DateSelected(date) =>
+    Js.Console.log(`date ${date} selected`)
+    (model, Tea.Cmd.none)
   }
 }
 
@@ -117,7 +127,37 @@ let viewTodos = todos => {
 let view = model =>
   switch model.page {
   | Home({todos}) =>
-    div(list{}, list{viewNavLinks(), viewButton("Get todos", GetTodos), viewTodos(todos)})
+    div(
+      list{},
+      list{
+        node("word-count", list{onMsg("customClicked", CustomClicked)}, list{}),
+        node(
+          "wc-datepicker",
+          list{},
+          list{
+            input'(
+              list{
+                type'("text"),
+                onCB("dateselect", "", ev => {
+                  switch ev["target"]->Js.Undefined.toOption {
+                  | Some(target) =>
+                    switch target["value"]->Js.Undefined.toOption {
+                    | Some(date) => Some(DateSelected(date))
+                    | None => None
+                    }
+                  | None => None
+                  }
+                }),
+              },
+              list{},
+            ),
+          },
+        ),
+        viewNavLinks(),
+        viewButton("Get todos", GetTodos),
+        viewTodos(todos),
+      },
+    )
   | NotFound({url}) => p(list{}, list{viewNavLinks(), `Page ${url} does not exist!`->text})
   | Me({session}) => p(list{}, list{viewNavLinks(), session.user.name->text})
   }

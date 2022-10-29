@@ -13,6 +13,7 @@
     "rescript": "^10.1.0-rc.2"
   },
   "dependencies": {
+    "@vanillawc/wc-datepicker": "^0.0.6",
     "bucklescript-tea": "github:jayeshbhoot/rescript-tea"
   }
 }
