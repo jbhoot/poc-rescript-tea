@@ -8,11 +8,11 @@
   },
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "rescript-tea": "github:pbiggar/rescript-tea"
-  },
   "devDependencies": {
     "esbuild": "^0.15.12",
     "rescript": "^10.1.0-rc.2"
+  },
+  "dependencies": {
+    "bucklescript-tea": "github:jayeshbhoot/rescript-tea"
   }
 }
