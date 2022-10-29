@@ -1,5 +1,10 @@
 open Tea.Html
 
+type user = {
+  name: string,
+  email: string,
+}
+
 type todo = {
   userId: int,
   id: int,
@@ -7,7 +12,10 @@ type todo = {
   completed: bool,
 }
 
-type session = {todos: array<todo>}
+type session = {
+  todos: array<todo>,
+  user: user,
+}
 
 type status<'a> =
   | NotLoaded
@@ -15,11 +23,15 @@ type status<'a> =
   | Loaded('a)
   | FailedToLoad(string)
 
-type page = Home({session: session, todos: status<array<todo>>})
+type page =
+  | Home({session: session, todos: status<array<todo>>})
+  | Me({session: session})
+  | NotFound({session: session, url: string})
 
 type state = {page: page}
 
 type msg =
+  | UrlChanged(string)
   | GetTodos
   | GotTodos(array<todo>)
   | GotErrorNotTodos(string)
@@ -27,23 +39,9 @@ type msg =
 @scope("JSON") external parseTodoResponse: string => array<todo> = "parse"
 
 let getTodos = () => {
-  //   Tea.Http.request({
-  //     method: "GET",
-  //     headers: list{
-  //       Header("Content-type", "application/json"),
-  //     },
-  //     url: "https://jsonplaceholder.typicode.com/todos",
-  //     body: Web.XMLHttpRequest.EmptyBody,
-  //     // expect: Tea.Http.expectStringResponse(Decoders.wrapExpect(decoder)),
-  //     expect: Http.Expect(Web.XMLHttpRequest.JsonResponseType, ),
-  //     timeout: None,
-  //     withCredentials: false,
-  //   })
-
   Tea.Http.send(resp => {
     switch resp {
-    | Ok(body) =>
-      GotTodos(body->parseTodoResponse)
+    | Ok(body) => GotTodos(body->parseTodoResponse)
     | Error(err) =>
       let error = switch err {
       | BadUrl(string) => "Bad url " ++ string
@@ -58,17 +56,46 @@ let getTodos = () => {
   }, Tea.Http.getString("https://jsonplaceholder.typicode.com/todos"))
 }
 
-let init = () => ({page: Home({session: {todos: []}, todos: NotLoaded})}, getTodos())
-
-let update = (model, msg) =>
-  switch model.page {
-  | Home({session, _}) =>
-    switch msg {
-    | GetTodos => ({page: Home({session, todos: Loading})}, getTodos())
-    | GotTodos(todos) => ({page: Home({session: {todos: todos}, todos: Loaded(todos)})}, Tea.Cmd.none)
-    | GotErrorNotTodos(err) => ({page: Home({session, todos: FailedToLoad(err)})}, Tea.Cmd.none)
-    }
+let update = (model, msg) => {
+  let session = switch model.page {
+  | Home({session}) => session
+  | Me({session}) => session
+  | NotFound({session}) => session
   }
+
+  switch msg {
+  | UrlChanged(hash) =>
+    Js.Console.log(hash)
+    switch hash {
+    // | "" => (0, Navigation.modifyUrl(toUrl(0)))
+    | "" => ({page: Home({session, todos: Loading})}, getTodos())
+    | "#todos" => ({page: Home({session, todos: Loading})}, getTodos())
+    | "#me" => ({page: Me({session: session})}, Tea.Cmd.none)
+    | unknownUrl => ({page: NotFound({session, url: unknownUrl})}, Tea.Cmd.none)
+    }
+  | GetTodos => ({page: Home({session, todos: Loading})}, getTodos())
+  | GotTodos(todos) => (
+      {page: Home({session: {...session, todos}, todos: Loaded(todos)})},
+      Tea.Cmd.none,
+    )
+  | GotErrorNotTodos(err) => ({page: Home({session, todos: FailedToLoad(err)})}, Tea.Cmd.none)
+  }
+}
+
+let viewNavLinks = () => {
+  nav(
+    list{},
+    list{
+      ul(
+        list{},
+        list{
+          li(list{}, list{a(list{href("#todos")}, list{"Todos"->text})}),
+          li(list{}, list{a(list{href("#me")}, list{"About me"->text})}),
+        },
+      ),
+    },
+  )
+}
 
 let viewButton = (title, msg) => {
   button(list{onClick(msg)}, list{text(title)})
@@ -89,12 +116,43 @@ let viewTodos = todos => {
 
 let view = model =>
   switch model.page {
-  | Home({todos}) => div(list{}, list{viewButton("Get todos", GetTodos), viewTodos(todos)})
+  | Home({todos}) =>
+    div(list{}, list{viewNavLinks(), viewButton("Get todos", GetTodos), viewTodos(todos)})
+  | NotFound({url}) => p(list{}, list{viewNavLinks(), `Page ${url} does not exist!`->text})
+  | Me({session}) => p(list{}, list{viewNavLinks(), session.user.name->text})
   }
 
-let main = Tea.App.standardProgram({
-  init,
-  subscriptions: _ => Tea.Sub.none,
-  update,
-  view,
-})
+let locationToMsg = location => {
+  open Web.Location
+  UrlChanged(location.hash)
+}
+
+let init = ((), location) => {
+  let user = {
+    name: "Jayesh Bhoot",
+    email: "jb@fakemail.com",
+  }
+  let session = {
+    user,
+    todos: [],
+  }
+  open Web.Location
+  switch location.hash {
+  // | "" => (0, Navigation.modifyUrl(toUrl(0)))
+  | "" => ({page: Home({session, todos: NotLoaded})}, getTodos())
+  | "#todos" => ({page: Home({session, todos: NotLoaded})}, getTodos())
+  | "#me" => ({page: Me({session: session})}, Tea.Cmd.none)
+  | unknownUrl => ({page: NotFound({session, url: unknownUrl})}, Tea.Cmd.none)
+  }
+}
+
+let main = Tea.Navigation.navigationProgram(
+  locationToMsg,
+  {
+    init,
+    subscriptions: _ => Tea.Sub.none,
+    update,
+    view,
+    shutdown: _ => Tea.Cmd.none,
+  },
+)
