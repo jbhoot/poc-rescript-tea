@@ -3,8 +3,8 @@
 - [x] Basic counter app
 - [x] Use CSS classes
 - [x] Make network calls
-- [x] URL navigation
-- [x] Use a custom component
+- [x] Routing
+- [x] Use a custom component, with event handling
 - [x] Implement session + page architecture found in https://github.com/elm/package.elm-lang.org/
 
 ## Usage
